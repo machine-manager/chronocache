@@ -1,27 +1,27 @@
-defmodule Memoize.Mixfile do
+defmodule UCache.Mixfile do
   use Mix.Project
 
   def project do
     [
-      app: :memoize,
-      version: "1.2.7",
-      elixir: "~> 1.4.5 or ~> 1.5",
-      description: "A method caching macro for elixir using CAS on ETS",
+      app: :ucache,
+      version: "1.0.0",
+      elixir: "~> 1.6",
+      description: "A very simple in-memory cache backed by ETS",
       package: [
-        maintainers: ["melpon"],
+        maintainers: ["ivan"],
         licenses: ["MIT"],
-        links: %{"GitHub" => "https://github.com/melpon/memoize"}
+        links: %{"GitHub" => "https://github.com/ludios/ucache"}
       ],
-      docs: [main: "Memoize"],
+      docs: [main: "UCache"],
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      source_url: "https://github.com/melpon/memoize"
+      source_url: "https://github.com/ludios/ucache"
     ]
   end
 
   def application do
-    [extra_applications: [:logger], mod: {Memoize.Application, []}]
+    [extra_applications: [:logger]]
   end
 
   defp deps do
