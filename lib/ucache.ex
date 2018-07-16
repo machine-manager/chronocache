@@ -1,4 +1,8 @@
 defmodule UCache do
+  def new() do
+    :ets.new(:ucache, [:public, :set, {:read_concurrency, true}])
+  end
+
   def invalidate(table, key) do
     :ets.select_delete(table, [{{key, {:completed, :_}}, [], [true]}])
   end
