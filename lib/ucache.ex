@@ -1,4 +1,4 @@
-defmodule Memoize.Cache do
+defmodule UCache do
   @cache_strategy Memoize.Application.cache_strategy()
 
   defp tab(key) do
