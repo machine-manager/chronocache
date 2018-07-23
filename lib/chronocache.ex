@@ -142,22 +142,34 @@ defmodule ChronoCache do
     case :ets.lookup(cc.value_table, key) do
       [{^key, _existing_value, existing_start_time} = expected] ->
         if start_time > existing_start_time do
-          # If this returns false, we don't need to retry it; it can only have been
-          # replaced by an even-newer value.
-          compare_and_swap(cc.value_table, expected, {key, start_time, result})
+          # If this fails, it may have been CAS'ed by another process, but we
+          # still need to retry because we might have an even-newer value.
+          if compare_and_swap(cc.value_table, expected, {key, start_time, result}) do
+            clear_and_get_waiter_pids(cc, key, start_time)
+          else
+            # retry
+            set_result_and_get_waiter_pids(cc, key, start_time, result)
+          end
         end
       [] ->
-        compare_and_swap(cc.value_table, :nothing, {key, start_time, result})
+        if compare_and_swap(cc.value_table, :nothing, {key, start_time, result}) do
+          clear_and_get_waiter_pids(cc, key, start_time)
+        else
+          # retry
+          set_result_and_get_waiter_pids(cc, key, start_time, result)
+        end
     end
+  end
 
+  defp clear_and_get_waiter_pids(cc, key, start_time) do
     runner_pid = self()
-    [{^key, {:running, ^runner_pid, waiter_pids}} = expected] = :ets.lookup(cc.waiter_table, key)
+    [{{^key, ^start_time}, {^runner_pid, waiter_pids}} = expected] = :ets.lookup(cc.waiter_table, {key, start_time})
 
     if compare_and_swap(cc.waiter_table, expected, :nothing) do
       waiter_pids
     else
       # retry
-      set_result_and_get_waiter_pids(cc, key, start_time, result)
+      clear_and_get_waiter_pids(cc, key, start_time)
     end
   end
 
