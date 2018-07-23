@@ -8,7 +8,7 @@ defmodule ChronoCache do
   @enforce_keys [:value_table, :waiter_table, :get_time, :compute_value]
   defstruct value_table: nil, waiter_table: nil, get_time: nil, compute_value: nil
 
-  def new(get_time, compute_value) do
+  def new(compute_value, get_time) do
     value_table = :ets.new(:chronocache_value_table, [:public, :set, {:read_concurrency, true}])
 
     waiter_table =
@@ -32,6 +32,14 @@ defmodule ChronoCache do
     :ets.delete(cc.waiter_table)
   end
 
+  @doc """
+  Returns the cached value for `key` with minimum freshness `minimum_time`, or
+  if not in cache, calls the fallback function to compute it.  The fallback
+  function will be called just once if more than one process is waiting,
+  unless the `minimum_time` is increased, in which case another execution of
+  fallback will be started.  Note that the value returned may be newer than
+  expected, as only the newest value is kept in the cache.
+  """
   def get_or_run(cc, key, minimum_time) do
     do_get_or_run(cc, key, minimum_time)
   end
@@ -87,7 +95,11 @@ defmodule ChronoCache do
 
   defp get_latest_waiter(cc, key) do
     limit = 1
-    case :ets.match_object(cc.waiter_table, {{key, :_}, :_}, limit) do
+    match_pattern = {{key, :_}, :_}
+    # http://erlang.org/doc/apps/erts/match_spec.html#ets-examples
+    match_spec = [{match_pattern, [], [:"$_"]}]
+
+    case :ets.select_reverse(cc.waiter_table, match_spec, limit) do
       {[object], _continuation} -> object
       _ -> nil
     end
