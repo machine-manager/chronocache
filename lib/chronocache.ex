@@ -34,11 +34,11 @@ defmodule ChronoCache do
 
   @doc """
   Returns the cached value for `key` with minimum freshness `minimum_time`, or
-  if not in cache, calls the fallback function to compute it.  The fallback
-  function will be called just once if more than one process is waiting,
-  unless the `minimum_time` is increased, in which case another execution of
-  fallback will be started.  Note that the value returned may be newer than
-  expected, as only the newest value is kept in the cache.
+  if not in cache, calls `cc.compute_value` with the key as the only argument.
+  `cc.compute_value` will be called just once if more than one process is waiting,
+  unless the `minimum_time` is raised, in which case `cc.compute_value` may be
+  called again.  Note that the value returned may be newer than expected, as
+  only the newest value is kept in the cache.
   """
   def get_or_run(cc, key, minimum_time) do
     do_get_or_run(cc, key, minimum_time)
@@ -111,7 +111,7 @@ defmodule ChronoCache do
 
     if compare_and_swap(cc.waiter_table, :nothing, {{key, start_time}, {runner_pid, []}}) do
       try do
-        cc.fallback.()
+        cc.compute_value.(key)
       else
         result ->
           waiter_pids = set_result_and_get_waiter_pids(cc, key, start_time, result)
