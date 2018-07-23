@@ -1,3 +1,4 @@
 [
-  inputs: [".formatter.exs", "mix.exs", "{bench,config,lib,test}/**/*.{ex,exs}"]
+  inputs: [".formatter.exs", "mix.exs", "{bench,config,lib,test}/**/*.{ex,exs}"],
+  line_length: 130
 ]

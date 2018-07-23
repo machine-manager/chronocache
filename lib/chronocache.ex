@@ -10,14 +10,7 @@ defmodule ChronoCache do
 
   def new(get_time, compute_value) do
     value_table = :ets.new(:chronocache_value_table, [:public, :set, {:read_concurrency, true}])
-
-    waiter_table =
-      :ets.new(:chronocache_waiter_table, [
-        :public,
-        :set,
-        {:read_concurrency, true},
-        {:write_concurrency, true}
-      ])
+    waiter_table = :ets.new(:chronocache_waiter_table, [:public, :set, {:read_concurrency, true}, {:write_concurrency, true}])
 
     %ChronoCache{
       value_table: value_table,
