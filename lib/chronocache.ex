@@ -149,6 +149,8 @@ defmodule ChronoCache do
             # retry
             set_result_and_get_waiter_pids(cc, key, start_time, result)
           end
+        else
+          clear_and_get_waiter_pids(cc, key, start_time)
         end
       [] ->
         if compare_and_swap(cc.value_table, :nothing, {key, start_time, result}) do
