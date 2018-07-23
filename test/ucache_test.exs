@@ -10,7 +10,7 @@ defmodule UCacheTest do
     assert 10 == UCache.get_or_run(table, :key, fn -> 10 end)
   end
 
-  test "many processes call get_or_run, but one process only calls the caching function" do
+  test "if many processes call get_or_run for the same key, only one process calls the fallback function" do
     table = UCache.new()
 
     fun = fn ->
@@ -48,8 +48,9 @@ defmodule UCacheTest do
     end
   end
 
-  test "if caching process is crashed when waiting many processes, one of the processes call the caching function" do
+  test "if fallback function raises an error, it is reraised for the first caller for the key" do
     table = UCache.new()
+    :ets.insert(table, {:call_count, 0})
 
     fun1 = fn ->
       assert_raise(RuntimeError, "failed", fn ->

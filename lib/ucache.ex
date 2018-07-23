@@ -15,11 +15,11 @@ defmodule UCache do
     :ets.delete(table)
   end
 
-  def get_or_run(table, key, fun) do
-    do_get_or_run(table, key, fun)
+  def get_or_run(table, key, fallback) do
+    do_get_or_run(table, key, fallback)
   end
 
-  defp do_get_or_run(table, key, fun) do
+  defp do_get_or_run(table, key, fallback) do
     case :ets.lookup(table, key) do
       # not started
       [] ->
@@ -28,7 +28,7 @@ defmodule UCache do
 
         if compare_and_swap(table, :nothing, {key, {:running, runner_pid, []}}) do
           try do
-            fun.()
+            fallback.()
           else
             result ->
               waiter_pids = set_result_and_get_waiter_pids(table, key, result)
@@ -37,7 +37,7 @@ defmodule UCache do
                 send(pid, {self(), :completed})
               end)
 
-              do_get_or_run(table, key, fun)
+              do_get_or_run(table, key, fallback)
           rescue
             error ->
               # the status should be :running
@@ -50,7 +50,7 @@ defmodule UCache do
               reraise error, System.stacktrace()
           end
         else
-          do_get_or_run(table, key, fun)
+          do_get_or_run(table, key, fallback)
         end
 
       # running
@@ -74,9 +74,9 @@ defmodule UCache do
             0 -> :ok
           end
 
-          do_get_or_run(table, key, fun)
+          do_get_or_run(table, key, fallback)
         else
-          do_get_or_run(table, key, fun)
+          do_get_or_run(table, key, fallback)
         end
 
       # completed
