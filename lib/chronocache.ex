@@ -82,8 +82,10 @@ defmodule ChronoCache do
                 0 -> :ok
               end
 
+              # this will get the now-cached value
               do_get(cc, key, minimum_time)
             else
+              # retry
               do_get(cc, key, minimum_time)
             end
 
@@ -120,10 +122,11 @@ defmodule ChronoCache do
             send(pid, {self(), :completed})
           end)
 
+          # get the now-cached value
           do_get(cc, key, minimum_time)
       rescue
         error ->
-          waiter_pids = clear_and_get_waiter_pids(cc, key, start_time)
+          waiter_pids = get_and_clear_waiter(cc, key, start_time)
 
           Enum.map(waiter_pids, fn pid ->
             send(pid, {self(), :failed})
@@ -144,17 +147,17 @@ defmodule ChronoCache do
           # If this fails, it may have been CAS'ed by another process, but we
           # still need to retry because we might have an even-newer value.
           if compare_and_swap(cc.value_table, expected, {key, start_time, result}) do
-            clear_and_get_waiter_pids(cc, key, start_time)
+            get_and_clear_waiter(cc, key, start_time)
           else
             # retry
             set_result_and_get_waiter_pids(cc, key, start_time, result)
           end
         else
-          clear_and_get_waiter_pids(cc, key, start_time)
+          get_and_clear_waiter(cc, key, start_time)
         end
       [] ->
         if compare_and_swap(cc.value_table, :nothing, {key, start_time, result}) do
-          clear_and_get_waiter_pids(cc, key, start_time)
+          get_and_clear_waiter(cc, key, start_time)
         else
           # retry
           set_result_and_get_waiter_pids(cc, key, start_time, result)
@@ -162,7 +165,7 @@ defmodule ChronoCache do
     end
   end
 
-  defp clear_and_get_waiter_pids(cc, key, start_time) do
+  defp get_and_clear_waiter(cc, key, start_time) do
     runner_pid = self()
     [{{^key, ^start_time}, {^runner_pid, waiter_pids}} = expected] = :ets.lookup(cc.waiter_table, {key, start_time})
 
@@ -170,7 +173,7 @@ defmodule ChronoCache do
       waiter_pids
     else
       # retry
-      clear_and_get_waiter_pids(cc, key, start_time)
+      get_and_clear_waiter(cc, key, start_time)
     end
   end
 
