@@ -56,8 +56,8 @@ defmodule ChronoCache do
       [] ->
         compute_value(cc, key, minimum_time)
 
-      [{^key, value, start_time}] when start_time >= minimum_time ->
-        value
+      [{^key, start_time, result}] when start_time >= minimum_time ->
+        result
 
       _ ->
         expected = get_latest_waiter(cc, key)
