@@ -123,8 +123,7 @@ defmodule ChronoCache do
           do_get(cc, key, minimum_time)
       rescue
         error ->
-          # the status should be :running
-          waiter_pids = delete_and_get_waiter_pids(cc, key, start_time)
+          waiter_pids = clear_and_get_waiter_pids(cc, key, start_time)
 
           Enum.map(waiter_pids, fn pid ->
             send(pid, {self(), :failed})
@@ -170,18 +169,6 @@ defmodule ChronoCache do
     else
       # retry
       clear_and_get_waiter_pids(cc, key, start_time)
-    end
-  end
-
-  defp delete_and_get_waiter_pids(cc, key, start_time) do
-    runner_pid = self()
-    [{{^key, ^start_time}, {^runner_pid, waiter_pids}} = expected] = :ets.lookup(cc.waiter_table, {key, start_time})
-
-    if compare_and_swap(cc.waiter_table, expected, :nothing) do
-      waiter_pids
-    else
-      # retry
-      delete_and_get_waiter_pids(cc, key, start_time)
     end
   end
 
