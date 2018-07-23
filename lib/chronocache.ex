@@ -40,8 +40,8 @@ defmodule ChronoCache do
   called again.  Note that the value returned may be newer than expected, as
   only the newest value is kept in the cache.
   """
-  def get_or_run(cc, key, minimum_time) do
-    do_get_or_run(cc, key, minimum_time)
+  def get(cc, key, minimum_time) do
+    do_get(cc, key, minimum_time)
   end
 
   # If we're still running for Time 1 and someone else requests Time 2,
@@ -50,7 +50,7 @@ defmodule ChronoCache do
   # enough for Time 2.  Time 1 callers may be given the Time 1 or the Time 2
   # calculation.  The value in the cache will be replaced with the Time 2
   # value as soon as the Time 2 calculation finishes.
-  defp do_get_or_run(cc, key, minimum_time) do
+  defp do_get(cc, key, minimum_time) do
     case :ets.lookup(cc.value_table, key) do
       # not started
       [] ->
@@ -82,9 +82,9 @@ defmodule ChronoCache do
                 0 -> :ok
               end
 
-              do_get_or_run(cc, key, minimum_time)
+              do_get(cc, key, minimum_time)
             else
-              do_get_or_run(cc, key, minimum_time)
+              do_get(cc, key, minimum_time)
             end
 
           _ ->
@@ -120,7 +120,7 @@ defmodule ChronoCache do
             send(pid, {self(), :completed})
           end)
 
-          do_get_or_run(cc, key, minimum_time)
+          do_get(cc, key, minimum_time)
       rescue
         error ->
           # the status should be :running
@@ -134,7 +134,7 @@ defmodule ChronoCache do
       end
     else
       # retry
-      do_get_or_run(cc, key, minimum_time)
+      do_get(cc, key, minimum_time)
     end
   end
 
