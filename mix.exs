@@ -1,22 +1,22 @@
-defmodule UCache.Mixfile do
+defmodule ChronoCache.Mixfile do
   use Mix.Project
 
   def project do
     [
-      app: :ucache,
+      app: :chronocache,
       version: "1.0.0",
       elixir: "~> 1.6",
-      description: "A very simple in-memory cache backed by ETS",
+      description: "A simple in-memory cache with minimum freshness checks, backed by ETS",
       package: [
         maintainers: ["ivan"],
         licenses: ["MIT"],
-        links: %{"GitHub" => "https://github.com/ludios/ucache"}
+        links: %{"GitHub" => "https://github.com/ludios/chronocache"}
       ],
-      docs: [main: "UCache"],
+      docs: [main: "ChronoCache"],
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      source_url: "https://github.com/ludios/ucache"
+      source_url: "https://github.com/ludios/chronocache"
     ]
   end
 

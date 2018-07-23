@@ -1,20 +1,18 @@
-defmodule UCacheTest do
+defmodule ChronoCacheTest do
   use ExUnit.Case
 
   test "get_or_run" do
-    table = UCache.new()
-    assert 10 == UCache.get_or_run(table, :key, fn -> 10 end)
-    assert 10 == UCache.get_or_run(table, :key, fn -> 10 end)
-    assert 1 == UCache.invalidate(table, :key)
-    assert 0 == UCache.invalidate(table, :key)
-    assert 10 == UCache.get_or_run(table, :key, fn -> 10 end)
+    table = ChronoCache.new()
+    assert 10 == ChronoCache.get_or_run(table, :key, fn -> 10 end)
+    assert 10 == ChronoCache.get_or_run(table, :key, fn -> 10 end)
+    assert 10 == ChronoCache.get_or_run(table, :key, fn -> 10 end)
   end
 
   test "if many processes call get_or_run for the same key, only one process calls the fallback function" do
-    table = UCache.new()
+    table = ChronoCache.new()
 
     fun = fn ->
-      assert 20 == UCache.get_or_run(table, :key, fn -> cache_single(table, 100, 20) end)
+      assert 20 == ChronoCache.get_or_run(table, :key, fn -> cache_single(table, 100, 20) end)
     end
 
     ps =
@@ -49,17 +47,17 @@ defmodule UCacheTest do
   end
 
   test "if fallback function raises an error, it is reraised for the first caller for the key" do
-    table = UCache.new()
+    table = ChronoCache.new()
     :ets.insert(table, {:call_count, 0})
 
     fun1 = fn ->
       assert_raise(RuntimeError, "failed", fn ->
-        UCache.get_or_run(table, :key, fn -> cache_raise(table, 100, 20) end)
+        ChronoCache.get_or_run(table, :key, fn -> cache_raise(table, 100, 20) end)
       end)
     end
 
     fun2 = fn ->
-      assert 30 == UCache.get_or_run(table, :key, fn -> cache_raise(table, 100, 30) end)
+      assert 30 == ChronoCache.get_or_run(table, :key, fn -> cache_raise(table, 100, 30) end)
     end
 
     ps =
