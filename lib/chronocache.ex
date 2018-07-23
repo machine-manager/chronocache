@@ -47,9 +47,9 @@ defmodule ChronoCache do
   # If we're still running for Time 1 and someone else requests Time 2,
   # we need to run the compute_value function again.  The value returned
   # from the function that is still running for Time 1 might not be fresh
-  # enough for Time 2.  Time 1 callers will be given the Time 1 calculation,
-  # but the value will be replaced in the cache with the Time 2 value as soon
-  # as the Time 2 calculation finishes.
+  # enough for Time 2.  Time 1 callers may be given the Time 1 or the Time 2
+  # calculation.  The value in the cache will be replaced with the Time 2
+  # value as soon as the Time 2 calculation finishes.
   defp do_get_or_run(cc, key, minimum_time) do
     case :ets.lookup(cc.value_table, key) do
       # not started
@@ -62,10 +62,7 @@ defmodule ChronoCache do
       _ ->
         expected = get_latest_waiter(cc, key)
         case expected do
-          nil ->
-            compute_value(cc, key, minimum_time)
-
-          {{^key, start_time}, {runner_pid, waiter_pids}} ->
+          {{^key, start_time}, {runner_pid, waiter_pids}} when start_time >= minimum_time ->
             waiter_pids = [self() | waiter_pids]
 
             if compare_and_swap(cc.waiter_table, expected, {{key, start_time}, {runner_pid, waiter_pids}}) do
@@ -89,6 +86,9 @@ defmodule ChronoCache do
             else
               do_get_or_run(cc, key, minimum_time)
             end
+
+          _ ->
+            compute_value(cc, key, minimum_time)
         end
     end
   end
