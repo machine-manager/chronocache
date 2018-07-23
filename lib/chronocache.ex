@@ -1,18 +1,35 @@
-# ets schema:
-# {key, {current_value, time_computed, waiters}}
-# waiters = [{time_started, runner_pid, waiter_pids}, ...]
+# value_table schema:
+# {key, {current_value, time_computed}}
+#
+# waiter_table schema:
+# {key, [{time_started, runner_pid, waiter_pids}, ...]}
 
 defmodule ChronoCache do
-  @enforce_keys [:table, :get_time, :compute_value]
-  defstruct table: nil, get_time: nil, compute_value: nil
+  @enforce_keys [:value_table, :waiter_table, :get_time, :compute_value]
+  defstruct value_table: nil, waiter_table: nil, get_time: nil, compute_value: nil
 
   def new(get_time, compute_value) do
-    table = :ets.new(:chronocache, [:public, :set, {:read_concurrency, true}])
-    %ChronoCache{table: table, get_time: get_time, compute_value: compute_value}
+    value_table = :ets.new(:chronocache_value_table, [:public, :set, {:read_concurrency, true}])
+
+    waiter_table =
+      :ets.new(:chronocache_waiter_table, [
+        :public,
+        :set,
+        {:read_concurrency, true},
+        {:write_concurrency, true}
+      ])
+
+    %ChronoCache{
+      value_table: value_table,
+      waiter_table: waiter_table,
+      get_time: get_time,
+      compute_value: compute_value
+    }
   end
 
   def destroy(cc) do
-    :ets.delete(cc.table)
+    :ets.delete(cc.value_table)
+    :ets.delete(cc.waiter_table)
   end
 
   def get_or_run(cc, key) do
@@ -26,7 +43,7 @@ defmodule ChronoCache do
   # but the value will be replaced in the cache with the Time 2 value as soon
   # as the Time 2 calculation finishes.
   defp do_get_or_run(cc, key, minimum_time) do
-    case :ets.lookup(cc.table, key) do
+    case :ets.lookup(cc.value_table, key) do
       # not started
       [] ->
         compute_value(cc, key)
@@ -96,7 +113,7 @@ defmodule ChronoCache do
 
   defp set_result_and_get_waiter_pids(cc, key, result, time) do
     runner_pid = self()
-    [{^key, {:running, ^runner_pid, waiter_pids}} = expected] = :ets.lookup(cc.table, key)
+    [{^key, {:running, ^runner_pid, waiter_pids}} = expected] = :ets.lookup(cc.value_table, key)
 
     if compare_and_swap(cc, expected, {key, {:completed, result, time}}) do
       waiter_pids
@@ -108,7 +125,7 @@ defmodule ChronoCache do
 
   defp delete_and_get_waiter_pids(cc, key) do
     runner_pid = self()
-    [{^key, {:running, ^runner_pid, waiter_pids}} = expected] = :ets.lookup(cc.table, key)
+    [{^key, {:running, ^runner_pid, waiter_pids}} = expected] = :ets.lookup(cc.value_table, key)
 
     if compare_and_swap(cc, expected, :nothing) do
       waiter_pids
@@ -119,16 +136,16 @@ defmodule ChronoCache do
   end
 
   defp compare_and_swap(cc, :nothing, value) do
-    :ets.insert_new(cc.table, value)
+    :ets.insert_new(cc.value_table, value)
   end
 
   defp compare_and_swap(cc, expected, :nothing) do
-    num_deleted = :ets.select_delete(cc.table, [{expected, [], [true]}])
+    num_deleted = :ets.select_delete(cc.value_table, [{expected, [], [true]}])
     num_deleted == 1
   end
 
   defp compare_and_swap(cc, expected, value) do
-    num_replaced = :ets.select_replace(cc.table, [{expected, [], [{:const, value}]}])
+    num_replaced = :ets.select_replace(cc.value_table, [{expected, [], [{:const, value}]}])
     num_replaced == 1
   end
 end
