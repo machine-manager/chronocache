@@ -54,10 +54,6 @@ defmodule ChronoCache do
     res = :ets.lookup(cc.value_table, key)
     IO.puts("do_get cc=#{inspect cc} key=#{inspect key} minimum_time=#{inspect minimum_time} res=#{inspect res}")
     case res do
-      # not started
-      [] ->
-        compute_value(cc, key, minimum_time)
-
       [{^key, start_time, result}] when start_time >= minimum_time ->
         result
 
@@ -91,8 +87,41 @@ defmodule ChronoCache do
               do_get(cc, key, minimum_time)
             end
 
+          # no waiter, or need newer waiter
           _ ->
-            compute_value(cc, key, minimum_time)
+            runner_pid = self()
+            start_time = cc.get_time.()
+            if minimum_time > start_time do
+              raise("Invalid minimum_time #{inspect minimum_time} which is greater than current time #{inspect start_time}")
+            end
+
+            if compare_and_swap(cc.waiter_table, :nothing, {{key, start_time}, {runner_pid, []}}) do
+              try do
+                cc.compute_value.(key)
+              else
+                result ->
+                  waiter_pids = set_result_and_get_waiter_pids(cc, key, start_time, result)
+
+                  Enum.map(waiter_pids, fn pid ->
+                    send(pid, {self(), :completed})
+                  end)
+
+                  # get the now-cached value
+                  do_get(cc, key, minimum_time)
+              rescue
+                error ->
+                  waiter_pids = get_and_clear_waiter(cc, key, start_time)
+
+                  Enum.map(waiter_pids, fn pid ->
+                    send(pid, {self(), :failed})
+                  end)
+
+                  reraise error, System.stacktrace()
+              end
+            else
+              # retry
+              do_get(cc, key, minimum_time)
+            end
         end
     end
   end
@@ -106,42 +135,6 @@ defmodule ChronoCache do
     case :ets.select_reverse(cc.waiter_table, match_spec, limit) do
       {[object], _continuation} -> object
       _ -> nil
-    end
-  end
-
-  defp compute_value(cc, key, minimum_time) do
-    runner_pid = self()
-    start_time = cc.get_time.()
-    if minimum_time > start_time do
-      raise("Invalid minimum_time #{inspect minimum_time} which is greater than current time #{inspect start_time}")
-    end
-
-    if compare_and_swap(cc.waiter_table, :nothing, {{key, start_time}, {runner_pid, []}}) do
-      try do
-        cc.compute_value.(key)
-      else
-        result ->
-          waiter_pids = set_result_and_get_waiter_pids(cc, key, start_time, result)
-
-          Enum.map(waiter_pids, fn pid ->
-            send(pid, {self(), :completed})
-          end)
-
-          # get the now-cached value
-          do_get(cc, key, minimum_time)
-      rescue
-        error ->
-          waiter_pids = get_and_clear_waiter(cc, key, start_time)
-
-          Enum.map(waiter_pids, fn pid ->
-            send(pid, {self(), :failed})
-          end)
-
-          reraise error, System.stacktrace()
-      end
-    else
-      # retry
-      do_get(cc, key, minimum_time)
     end
   end
 
