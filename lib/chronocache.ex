@@ -86,7 +86,7 @@ defmodule ChronoCache do
             runner_pid = self()
             start_time = cc.get_time.()
             if minimum_time > start_time do
-              raise("Invalid minimum_time #{inspect minimum_time} which is greater than current time #{inspect start_time}")
+              raise("Invalid minimum_time #{inspect minimum_time}, greater than current time #{inspect start_time}")
             end
 
             if compare_and_swap(cc.waiter_table, :nothing, {{key, start_time}, {runner_pid, []}}) do
