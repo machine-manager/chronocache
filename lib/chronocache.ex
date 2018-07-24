@@ -29,23 +29,23 @@ defmodule ChronoCache do
   end
 
   @doc """
-  Returns the cached value for `key` with minimum freshness `minimum_time`, or
-  if not in cache, calls `cc.compute_value` with `key` and `minimum_time` as arguments.
-  `cc.compute_value` will be called just once if more than one process is waiting,
-  unless the `minimum_time` is raised, in which case `cc.compute_value` may be
-  called again.  Note that the value returned may be newer than expected, as
-  only the newest value is kept in the cache.
+  Returns the cached value for `key` with minimum freshness `minimum_time`.
+  If not available in the cache, internally calls `cc.compute_value` with `key`
+  and `minimum_time` as arguments.  `cc.compute_value` will be called just once
+  if more than one process is waiting, unless the `minimum_time` is raised, in
+  which case `cc.compute_value` may be called again.  The value returned may be
+  newer than expected, as only the newest value is kept in the cache.
   """
   def get(cc, key, minimum_time) do
     do_get(cc, key, minimum_time)
   end
 
-  # If we're still running for Time 1 and someone else requests Time 2,
+  # If we're still running for Time 1 and another process requests Time 2,
   # we need to run the compute_value function again.  The value returned
-  # from the function that is still running for Time 1 might not be fresh
-  # enough for Time 2.  Time 1 callers may be given the Time 1 or the Time 2
-  # calculation.  The value in the cache will be replaced with the Time 2
-  # value as soon as the Time 2 calculation finishes.
+  # from the function still running for Time 1 might not be fresh enough for
+  # the Time 2 caller.  Time 1 callers may be given the Time 1 or the Time 2
+  # result.  The value in the cache will be replaced with the Time 2 value as
+  # soon as the Time 2 calculation finishes.
   defp do_get(cc, key, minimum_time) do
     case :ets.lookup(cc.value_table, key) do
       [{^key, start_time, result}] when start_time >= minimum_time ->
