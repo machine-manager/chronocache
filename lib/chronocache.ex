@@ -51,7 +51,9 @@ defmodule ChronoCache do
   # calculation.  The value in the cache will be replaced with the Time 2
   # value as soon as the Time 2 calculation finishes.
   defp do_get(cc, key, minimum_time) do
-    case :ets.lookup(cc.value_table, key) do
+    res = :ets.lookup(cc.value_table, key)
+    IO.puts("do_get cc=#{inspect cc} key=#{inspect key} minimum_time=#{inspect minimum_time} res=#{inspect res}")
+    case res do
       # not started
       [] ->
         compute_value(cc, key, minimum_time)
@@ -110,6 +112,9 @@ defmodule ChronoCache do
   defp compute_value(cc, key, minimum_time) do
     runner_pid = self()
     start_time = cc.get_time.()
+    if minimum_time > start_time do
+      raise("Invalid minimum_time #{inspect minimum_time} which is greater than current time #{inspect start_time}")
+    end
 
     if compare_and_swap(cc.waiter_table, :nothing, {{key, start_time}, {runner_pid, []}}) do
       try do
