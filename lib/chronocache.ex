@@ -51,9 +51,7 @@ defmodule ChronoCache do
   # calculation.  The value in the cache will be replaced with the Time 2
   # value as soon as the Time 2 calculation finishes.
   defp do_get(cc, key, minimum_time) do
-    res = :ets.lookup(cc.value_table, key)
-    IO.puts("do_get cc=#{inspect cc} key=#{inspect key} minimum_time=#{inspect minimum_time} res=#{inspect res}")
-    case res do
+    case :ets.lookup(cc.value_table, key) do
       [{^key, start_time, result}] when start_time >= minimum_time ->
         result
 
