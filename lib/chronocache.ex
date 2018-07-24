@@ -140,7 +140,7 @@ defmodule ChronoCache do
 
   defp set_result_and_get_waiter_pids(cc, key, start_time, result) do
     case :ets.lookup(cc.value_table, key) do
-      [{^key, _existing_value, existing_start_time} = expected] ->
+      [{^key, existing_start_time, _existing_value} = expected] ->
         if start_time > existing_start_time do
           # If this fails, it may have been CAS'ed by another process, but we
           # still need to retry because we might have an even-newer value.
