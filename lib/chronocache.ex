@@ -1,16 +1,12 @@
-# value_table schema:
-# {key, {current_value, time_computed}}
-#
-# waiter_table schema:
-# {{key, time_started}, {runner_pid, waiter_pids}}
-
 defmodule ChronoCache do
   @enforce_keys [:value_table, :waiter_table, :get_time, :compute_value]
   defstruct value_table: nil, waiter_table: nil, get_time: nil, compute_value: nil
 
   def new(compute_value, get_time) do
+    # {key, {result, time_computed}}
     value_table = :ets.new(:chronocache_value_table, [:public, :set, {:read_concurrency, true}])
 
+    # {{key, time_started}, {runner_pid, waiter_pids}}
     waiter_table =
       :ets.new(:chronocache_waiter_table, [
         :public,
@@ -34,7 +30,7 @@ defmodule ChronoCache do
 
   @doc """
   Returns the cached value for `key` with minimum freshness `minimum_time`, or
-  if not in cache, calls `cc.compute_value` with the key as the only argument.
+  if not in cache, calls `cc.compute_value` with `key` and `minimum_time` as arguments.
   `cc.compute_value` will be called just once if more than one process is waiting,
   unless the `minimum_time` is raised, in which case `cc.compute_value` may be
   called again.  Note that the value returned may be newer than expected, as
@@ -95,7 +91,7 @@ defmodule ChronoCache do
 
             if compare_and_swap(cc.waiter_table, :nothing, {{key, start_time}, {runner_pid, []}}) do
               try do
-                cc.compute_value.(key)
+                cc.compute_value.(key, minimum_time)
               else
                 result ->
                   waiter_pids = set_result_and_get_waiter_pids(cc, key, start_time, result)
