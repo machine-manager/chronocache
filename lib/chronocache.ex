@@ -2,7 +2,14 @@ defmodule ChronoCache do
   @enforce_keys [:value_table, :waiter_table, :get_time, :compute_value]
   defstruct value_table: nil, waiter_table: nil, get_time: nil, compute_value: nil
 
+  require Logger
+
   def new(compute_value, get_time) do
+    Logger.debug(
+      "Creating chronocache with " <>
+        "compute_value=#{inspect(compute_value)}, get_time=#{inspect(get_time)}"
+    )
+
     # {key, {result, time_computed}}
     value_table = :ets.new(:chronocache_value_table, [:public, :set, {:read_concurrency, true}])
 
@@ -24,6 +31,8 @@ defmodule ChronoCache do
   end
 
   def destroy(cc) do
+    Logger.debug("Destroying chronocache #{inspect(cc)}")
+
     :ets.delete(cc.value_table)
     :ets.delete(cc.waiter_table)
   end
@@ -49,15 +58,30 @@ defmodule ChronoCache do
   defp do_get(cc, key, minimum_time) do
     case :ets.lookup(cc.value_table, key) do
       [{^key, start_time, result}] when start_time >= minimum_time ->
+        Logger.debug(
+          "get(#{inspect(key)}, #{inspect(minimum_time)}) returning cached result " <>
+            "#{inspect(result)} from time #{inspect(start_time)}"
+        )
+
         result
 
       _ ->
         expected = get_latest_waiter(cc, key)
+
         case expected do
           {{^key, start_time}, {runner_pid, waiter_pids}} when start_time >= minimum_time ->
+            Logger.debug(
+              "get(#{inspect(key)}, #{inspect(minimum_time)}) waiting for " <>
+                "#{inspect(runner_pid)} with #{length(waiter_pids)} other waiters"
+            )
+
             waiter_pids = [self() | waiter_pids]
 
-            if compare_and_swap(cc.waiter_table, expected, {{key, start_time}, {runner_pid, waiter_pids}}) do
+            if compare_and_swap(
+                 cc.waiter_table,
+                 expected,
+                 {{key, start_time}, {runner_pid, waiter_pids}}
+               ) do
               ref = Process.monitor(runner_pid)
 
               receive do
@@ -77,16 +101,27 @@ defmodule ChronoCache do
               # this will get the now-cached value
               do_get(cc, key, minimum_time)
             else
-              # retry
+              Logger.debug(
+                "Retrying do_get(#{inspect(key)}, #{inspect(minimum_time)}) " <>
+                  "after failing to CAS existing waiter"
+              )
+
               do_get(cc, key, minimum_time)
             end
 
           # no waiter, or need newer waiter
           _ ->
+            Logger.debug("get(#{inspect(key)}, #{inspect(minimum_time)}) creating new waiter")
+
             runner_pid = self()
             start_time = cc.get_time.()
+
             if minimum_time > start_time do
-              raise("Invalid minimum_time #{inspect minimum_time}, greater than current time #{inspect start_time}")
+              raise(
+                "Invalid minimum_time #{inspect(minimum_time)}, greater than current time #{
+                  inspect(start_time)
+                }"
+              )
             end
 
             if compare_and_swap(cc.waiter_table, :nothing, {{key, start_time}, {runner_pid, []}}) do
@@ -113,7 +148,11 @@ defmodule ChronoCache do
                   reraise error, System.stacktrace()
               end
             else
-              # retry
+              Logger.debug(
+                "Retrying do_get(#{inspect(key)}, #{inspect(minimum_time)}) " <>
+                  "after failing to CAS new waiter"
+              )
+
               do_get(cc, key, minimum_time)
             end
         end
@@ -141,17 +180,26 @@ defmodule ChronoCache do
           if compare_and_swap(cc.value_table, expected, {key, start_time, result}) do
             get_and_clear_waiter(cc, key, start_time)
           else
-            # retry
+            Logger.debug(
+              "Retrying set_result_and_get_waiter_pids after failing to CAS existing with " <>
+                inspect({key, start_time, result})
+            )
+
             set_result_and_get_waiter_pids(cc, key, start_time, result)
           end
         else
           get_and_clear_waiter(cc, key, start_time)
         end
+
       [] ->
         if compare_and_swap(cc.value_table, :nothing, {key, start_time, result}) do
           get_and_clear_waiter(cc, key, start_time)
         else
-          # retry
+          Logger.debug(
+            "Retrying set_result_and_get_waiter_pids after failing to CAS nothing with " <>
+              inspect({key, start_time, result})
+          )
+
           set_result_and_get_waiter_pids(cc, key, start_time, result)
         end
     end
@@ -159,12 +207,18 @@ defmodule ChronoCache do
 
   defp get_and_clear_waiter(cc, key, start_time) do
     runner_pid = self()
-    [{{^key, ^start_time}, {^runner_pid, waiter_pids}} = expected] = :ets.lookup(cc.waiter_table, {key, start_time})
+
+    [{{^key, ^start_time}, {^runner_pid, waiter_pids}} = expected] =
+      :ets.lookup(cc.waiter_table, {key, start_time})
 
     if compare_and_swap(cc.waiter_table, expected, :nothing) do
       waiter_pids
     else
-      # retry
+      Logger.debug(
+        "Retrying get_and_clear_waiter after failing to clear waiter for " <>
+          inspect({key, start_time})
+      )
+
       get_and_clear_waiter(cc, key, start_time)
     end
   end
