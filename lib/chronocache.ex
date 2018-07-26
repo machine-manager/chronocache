@@ -6,7 +6,7 @@ defmodule ChronoCache do
 
   def new(compute_value, get_time) do
     Logger.debug(
-      "Creating chronocache with " <>
+      "Creating cache with " <>
         "compute_value=#{inspect(compute_value)}, get_time=#{inspect(get_time)}"
     )
 
@@ -31,7 +31,7 @@ defmodule ChronoCache do
   end
 
   def destroy(cc) do
-    Logger.debug("Destroying chronocache #{inspect(cc)}")
+    Logger.debug("Destroying #{inspect(cc)}")
 
     :ets.delete(cc.value_table)
     :ets.delete(cc.waiter_table)
