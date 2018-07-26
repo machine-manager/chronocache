@@ -66,9 +66,10 @@ defmodule ChronoCache do
         result
 
       _ ->
-        expected = get_latest_waiter(cc, key)
+        waiter = get_latest_waiter(cc, key)
+        Logger.debug("Latest waiter for key=#{inspect key} is #{inspect waiter}")
 
-        case expected do
+        case waiter do
           {{^key, start_time}, {runner_pid, waiter_pids}} when start_time >= minimum_time ->
             Logger.debug(
               "get(#{inspect(key)}, #{inspect(minimum_time)}) waiting for " <>
@@ -79,7 +80,7 @@ defmodule ChronoCache do
 
             if compare_and_swap(
                  cc.waiter_table,
-                 expected,
+                 waiter,
                  {{key, start_time}, {runner_pid, waiter_pids}}
                ) do
               ref = Process.monitor(runner_pid)
